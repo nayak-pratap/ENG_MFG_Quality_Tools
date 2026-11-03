@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Framework Selector</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><nav aria-label="Tools"><a href="index.html">Home</a><a href="spc.html">SPC and capability</a><a href="fmea.html">FMEA worksheet</a><a href="sigma.html">DPMO and sigma</a><a href="oee.html">OEE, takt and flow</a><a href="kanban.html">WIP simulator</a><a href="vsm.html">VSM</a><a href="selector.html" aria-current="page">Framework selector</a></nav>
+<h1>Framework selector</h1>
+<p class="lead">Tick every symptom that applies. You get the three frameworks that address most of them, with the reason for each.</p></header>
+<main>
+<div class="card"><fieldset style="border:0;padding:0;margin:0"><legend class="note" style="padding:0">What are you seeing?</legend><div id="list"></div></fieldset></div>
+<div id="out" aria-live="polite"></div>
+<p class="note">This is a starting-point heuristic: each symptom adds weight to the frameworks that usually address it, and the ranking is only the sum. It does not diagnose root cause. Confirm with data from the gemba before committing to a programme, and treat the first recommendation as the place to start reading, not a decision.</p>
+</main>
+<script src="lib/ops.js"></script>
+<script>
+var O=OpsTools,$=function(i){return document.getElementById(i)};
+// Base address of the framework pages. Change this one line if the site moves.
+var BASE='https://pratapnayak.netlify.app/tools/manufacturing-excellence/';
+var TITLES={'tps-house':'Toyota Production System and the House of Lean','flow-pull-vsm':'Flow, Pull and Value Stream Mapping','standard-work-5s':'Standard Work, Visual Management and 5S','daily-management':'Lean Daily Management and Leader Routines','a3':'A3 Problem Solving','hoshin-kanri':'Hoshin Kanri (Strategy Deployment)','tpm-oee':'TPM and OEE','fmea-practice':'FMEA in Current Practice (AIAG-VDA)','shingo':'The Shingo Model','digital-lean':'Digital and AI-Enabled Lean','toc-dbr':'Theory of Constraints and Drum-Buffer-Rope','ddmrp':'Demand Driven MRP (DDMRP)','sop-ibp':'S&OP and Integrated Business Planning','conwip-polca':'CONWIP and POLCA','factory-physics':'Factory Physics'};
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+$('list').innerHTML=O.SYMPTOMS.map(function(s){return '<label style="display:flex;gap:10px;align-items:flex-start;color:var(--fg);font-size:1rem;padding:5px 0"><input type="checkbox" value="'+s.id+'" style="width:auto;margin-top:5px"> <span>'+esc(s.text)+'</span></label>'}).join('');
+function run(){
+  var ids=Array.prototype.map.call(document.querySelectorAll('#list input:checked'),function(c){return c.value});
+  if(!ids.length){$('out').innerHTML='';return}
+  var rec=O.recommend(ids,3);
+  $('out').innerHTML='<div class="card"><h2 style="margin-top:0">Start with</h2><ol>'+rec.map(function(r){
+    return '<li style="margin-bottom:10px"><a href="'+BASE+r.slug+'.html" target="_blank" rel="noopener"><b>'+esc(TITLES[r.slug]||r.slug)+'</b></a> <span class="note">(score '+r.score+')</span><br><span class="note">Because: '+r.why.map(esc).join('; ')+'</span></li>'}).join('')+'</ol></div>';
+}
+$('list').addEventListener('change',run);
+</script>
+</body></html>

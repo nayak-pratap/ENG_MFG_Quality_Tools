@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Value Stream Map Builder</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><nav aria-label="Tools"><a href="index.html">Home</a><a href="spc.html">SPC and capability</a><a href="fmea.html">FMEA worksheet</a><a href="sigma.html">DPMO and sigma</a><a href="oee.html">OEE, takt and flow</a><a href="kanban.html">WIP simulator</a><a href="vsm.html" aria-current="page">VSM</a><a href="selector.html">Framework selector</a></nav>
+<h1>Value stream map builder</h1>
+<p class="lead">Enter the current state, one row per process step. See lead time, value-added ratio, and which steps cannot keep up with takt.</p></header>
+<main>
+<div class="card">
+<div class="grid">
+<div><label for="dm">Customer demand (units/day)</label><input id="dm" type="number" min="1" step="any" value="100"></div>
+<div><label for="av">Available time (min/day)</label><input id="av" type="number" min="1" step="any" value="400"></div>
+</div>
+<div class="scroll" style="margin-top:10px"><table id="tbl"><thead><tr><th>Step</th><th>Cycle time (min/unit)</th><th>Changeover (min)</th><th>Batch (units)</th><th>Uptime (%)</th><th>Units waiting before step</th><th></th></tr></thead><tbody></tbody></table></div>
+<p><button id="add">Add step</button> <button id="ex" class="sec">Load example</button> <button id="csv" class="sec">Export CSV</button></p>
+<p id="msg" class="err" role="alert"></p>
+</div>
+<div id="res" hidden>
+<div class="stats" id="out" aria-live="polite"></div>
+<div class="card scroll"><h2 style="margin-top:0">Load against takt by step</h2><svg id="c1" role="img" aria-label="Step load versus takt"></svg></div>
+<div class="card"><h2 style="margin-top:0">Reading the result</h2><p id="read"></p></div>
+</div>
+<p class="note">Effective time per unit = (cycle time + changeover / batch) / uptime. Load = effective time / takt; above 100% the step cannot meet demand. Waiting time before a step = units waiting / daily demand. Lead time = total waiting days + value-adding minutes as a share of the available day. Example numbers are illustrative. Data is kept only in this browser.</p>
+</main>
+<script src="lib/ops.js"></script>
+<script>
+var O=OpsTools,$=function(i){return document.getElementById(i)},KEY='vsm-v1';
+var rows=[];
+var EX=[{name:'Saw',ct:1.2,co:15,batch:200,up:95,wip:400},{name:'Turn',ct:2.5,co:30,batch:100,up:90,wip:300},{name:'Heat treat',ct:0.4,co:0,batch:500,up:98,wip:1500},{name:'Grind',ct:3.6,co:20,batch:100,up:88,wip:600},{name:'Inspect',ct:1.5,co:0,batch:1,up:100,wip:200}];
+function blank(){return{name:'',ct:1,co:0,batch:1,up:100,wip:0}}
+function load(){try{rows=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){rows=[]}if(!rows.length)rows=EX.map(function(r){return Object.assign({},r)})}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(rows))}catch(e){}}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function f(x,d){return isFinite(x)?x.toLocaleString(undefined,{maximumFractionDigits:d}):'n/a'}
+function stat(v,l,c){return '<div class="stat"><b class="'+(c||'')+'">'+v+'</b><span>'+l+'</span></div>'}
+function render(){
+  var tb=$('tbl').tBodies[0];tb.innerHTML='';
+  rows.forEach(function(r,i){
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td><input data-i="'+i+'" data-k="name" value="'+esc(r.name)+'" aria-label="Step name '+(i+1)+'"></td>'+
+      ['ct','co','batch','up','wip'].map(function(k){return '<td><input type="number" step="any" min="0" data-i="'+i+'" data-k="'+k+'" value="'+r[k]+'" aria-label="'+k+' step '+(i+1)+'"></td>'}).join('')+
+      '<td><button class="sec" data-del="'+i+'" aria-label="Remove step '+(i+1)+'">&times;</button></td>';
+    tb.appendChild(tr);
+  });
+}
+function calc(){
+  $('msg').textContent='';
+  try{
+    var steps=rows.map(function(r,i){return{name:r.name||('Step '+(i+1)),ct:+r.ct,co:+r.co,batch:+r.batch,uptime:(+r.up)/100,wipUnits:+r.wip}});
+    if(!steps.length)throw new Error('Add at least one step.');
+    var m=O.vsm(steps,+$('dm').value,+$('av').value);
+    var over=m.rows.filter(function(r){return r.load>1}).map(function(r){return r.name});
+    $('out').innerHTML=stat(f(m.takt,2)+' min','Takt time')+stat(f(m.leadTimeDays,2)+' days','Lead time')+stat(f(m.valueAddedMin,1)+' min','Value-adding time')+stat(f(m.vaRatio*100,2)+'%','Value-added ratio','bad')+stat(f(m.bottleneckLoad*100,0)+'%','Load at '+esc(m.bottleneck),m.bottleneckLoad>1?'bad':'good');
+    var W=860,H=40+m.rows.length*34,l=130,r=40,mx=Math.max(1.2,m.bottleneckLoad*1.1),X=function(v){return l+v/mx*(W-l-r)};
+    var s='<line x1="'+X(1)+'" x2="'+X(1)+'" y1="6" y2="'+(H-24)+'" stroke="currentColor" stroke-dasharray="5 4"/><text x="'+X(1)+'" y="'+(H-8)+'" text-anchor="middle" font-size="12" fill="currentColor">takt (100%)</text>';
+    m.rows.forEach(function(rw,i){var y=10+i*34;s+='<text x="'+(l-8)+'" y="'+(y+17)+'" text-anchor="end" font-size="13" fill="currentColor">'+esc(rw.name)+'</text><rect x="'+l+'" y="'+y+'" width="'+(X(rw.load)-l)+'" height="24" fill="'+(rw.load>1?'#b42318':'#0b6e4f')+'"><title>'+esc(rw.name)+': '+f(rw.load*100,0)+'% of takt, waits '+f(rw.waitDays,2)+' days</title></rect><text x="'+(X(rw.load)+6)+'" y="'+(y+17)+'" font-size="12" fill="currentColor">'+f(rw.load*100,0)+'%</text>'});
+    $('c1').setAttribute('viewBox','0 0 '+W+' '+H);$('c1').innerHTML=s;
+    var top=m.rows.slice().sort(function(a,b){return b.waitDays-a.waitDays})[0];
+    $('read').textContent='Only '+f(m.vaRatio*100,2)+'% of the '+f(m.leadTimeDays,1)+'-day lead time is value-adding; the rest is waiting, mostly before '+top.name+' ('+f(top.waitDays,1)+' days). '+
+      (over.length?'Steps over takt: '+over.join(', ')+'. They cannot meet demand as set up; reduce changeover or batch, raise uptime, or add capacity there first.':'No step exceeds takt as entered, so the gain is in cutting waiting and batch size.');
+    $('res').hidden=false;
+  }catch(e){$('msg').textContent=e.message;$('res').hidden=true}
+}
+$('tbl').addEventListener('input',function(e){var el=e.target,i=el.dataset.i,k=el.dataset.k;if(i===undefined)return;rows[i][k]=k==='name'?el.value:(el.value===''?0:+el.value);save();calc()});
+$('tbl').addEventListener('click',function(e){var d=e.target.dataset.del;if(d===undefined)return;rows.splice(+d,1);save();render();calc()});
+$('add').addEventListener('click',function(){rows.push(blank());save();render();calc()});
+$('ex').addEventListener('click',function(){rows=EX.map(function(r){return Object.assign({},r)});save();render();calc()});
+['dm','av'].forEach(function(i){$(i).addEventListener('input',calc)});
+$('csv').addEventListener('click',function(){
+  var q=function(s){s=String(s);if(/^[=+\-@]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"'};
+  var out=['Step,Cycle time min,Changeover min,Batch,Uptime %,Units waiting'].concat(rows.map(function(r){return [q(r.name),r.ct,r.co,r.batch,r.up,r.wip].join(',')}));
+  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([out.join('\n')],{type:'text/csv'}));a.download='vsm.csv';a.click();
+});
+load();render();calc();
+</script>
+</body></html>

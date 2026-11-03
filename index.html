@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Quality Tools for Manufacturing</title><link rel="stylesheet" href="style.css"></head>
 <body>
-<header><nav aria-label="Tools"><a href="index.html" aria-current="page">Home</a><a href="spc.html">SPC and capability</a><a href="fmea.html">FMEA worksheet</a><a href="sigma.html">DPMO and sigma</a></nav>
+<header><nav aria-label="Tools"><a href="index.html" aria-current="page">Home</a><a href="spc.html">SPC and capability</a><a href="fmea.html">FMEA worksheet</a><a href="sigma.html">DPMO and sigma</a><a href="oee.html">OEE, takt and flow</a><a href="kanban.html">WIP simulator</a><a href="vsm.html">VSM</a><a href="selector.html">Framework selector</a></nav>
 <h1>Quality Tools for Manufacturing</h1>
 <p class="lead">Browser-based calculators for the quality methods used on machining and assembly floors. Everything runs locally; your data never leaves the page.</p></header>
 <main>
@@ -10,12 +10,17 @@
 <a class="card" href="spc.html" style="text-decoration:none;color:inherit"><h2 style="margin-top:0">SPC and capability</h2><p>Paste measurements, get an I-MR or Xbar-R chart, Nelson rule flags, and Cp, Cpk, Pp, Ppk against your specification limits.</p></a>
 <a class="card" href="fmea.html" style="text-decoration:none;color:inherit"><h2 style="margin-top:0">FMEA worksheet</h2><p>Rate severity, occurrence and detection; see RPN and Action Priority side by side; export CSV.</p></a>
 <a class="card" href="sigma.html" style="text-decoration:none;color:inherit"><h2 style="margin-top:0">DPMO and sigma level</h2><p>Convert defects, units and opportunities to DPMO, yield and sigma level, or go back from a sigma level.</p></a>
+<a class="card" href="oee.html" style="text-decoration:none;color:inherit"><h2 style="margin-top:0">OEE, takt and flow</h2><p>OEE with loss breakdown, takt and line balance, Little's Law, and queue time from utilization.</p></a>
+<a class="card" href="kanban.html" style="text-decoration:none;color:inherit"><h2 style="margin-top:0">Push vs pull WIP simulator</h2><p>See how a WIP cap trades throughput against cycle time on a line with random process times.</p></a>
+<a class="card" href="vsm.html" style="text-decoration:none;color:inherit"><h2 style="margin-top:0">Value stream map builder</h2><p>Current-state lead time, value-added ratio and load against takt for each step.</p></a>
+<a class="card" href="selector.html" style="text-decoration:none;color:inherit"><h2 style="margin-top:0">Framework selector</h2><p>Tick your symptoms, get the frameworks most likely to help, with reasons.</p></a>
 </div>
 <h2>Read before relying on results</h2>
 <ul>
 <li>Capability indices assume a stable, roughly normal process. Check the control chart first; a Cpk from an unstable process describes nothing.</li>
 <li>Cp and Cpk use the within-subgroup sigma estimated from the chart; Pp and Ppk use the overall sample standard deviation.</li>
 <li>The Action Priority column is an illustrative severity-weighted rule, not the AIAG-VDA table. Load a table you are licensed to use to get official values.</li>
+<li>The WIP simulator is a simple single-product serial line with a fixed seed; use it to build intuition, not to size your plant.</li>
 <li>Sigma level uses the conventional 1.5 shift. Some organisations report without it, so state which convention you use.</li>
 </ul>
 </main>

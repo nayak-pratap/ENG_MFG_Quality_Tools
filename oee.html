@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OEE, Takt and Flow Calculators</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><nav aria-label="Tools"><a href="index.html">Home</a><a href="spc.html">SPC and capability</a><a href="fmea.html">FMEA worksheet</a><a href="sigma.html">DPMO and sigma</a><a href="oee.html" aria-current="page">OEE, takt and flow</a><a href="kanban.html">WIP simulator</a><a href="vsm.html">VSM</a><a href="selector.html">Framework selector</a></nav>
+<h1>OEE, takt and flow calculators</h1>
+<p class="lead">Four short calculators: OEE with loss breakdown, takt and line balance, Little's Law, and queue time from utilization.</p></header>
+<main>
+
+<div class="card"><h2 style="margin-top:0">1. OEE</h2>
+<div class="grid">
+<div><label for="pl">Planned production time (min)</label><input id="pl" type="number" min="0" step="any" value="480"></div>
+<div><label for="dn">Downtime: breakdowns and setups (min)</label><input id="dn" type="number" min="0" step="any" value="48"></div>
+<div><label for="ic">Ideal cycle time (min/unit)</label><input id="ic" type="number" min="0" step="any" value="0.5"></div>
+<div><label for="tc">Total units produced</label><input id="tc" type="number" min="0" step="any" value="756"></div>
+<div><label for="gc">Good units</label><input id="gc" type="number" min="0" step="any" value="740"></div>
+</div>
+<div class="stats" id="oeeOut" aria-live="polite"></div>
+<svg id="oeeBar" role="img" aria-label="Where planned time went"></svg>
+<p class="note">Availability = run time / planned time. Performance = ideal cycle time x total units / run time. Quality = good / total. Count planned stops (breaks, planned maintenance) outside planned time, and record micro-stops as downtime, or OEE will look better than the process is. About 85% is often quoted as world-class for high-volume discrete work; many plants sit nearer 60 to 75%, and food, pharma and high-mix plants often run lower by design. Compare to your own baseline first.</p></div>
+
+<div class="card"><h2 style="margin-top:0">2. Takt time and line balance</h2>
+<div class="grid">
+<div><label for="av">Available time per shift (min)</label><input id="av" type="number" min="0" step="any" value="450"></div>
+<div><label for="dm">Customer demand per shift (units)</label><input id="dm" type="number" min="0" step="any" value="90"></div>
+</div>
+<label for="tasks" style="margin-top:10px">Tasks, one per line as <code>name, minutes</code></label>
+<textarea id="tasks" spellcheck="false">Load, 2.5
+Rough turn, 4
+Finish turn, 3.5
+Deburr, 2
+Inspect, 3
+Pack, 1.5</textarea>
+<div class="stats" id="takOut" aria-live="polite"></div>
+<p class="note">Takt = available time / demand. Minimum stations = ceil(total work / takt). Any single task longer than takt must be split or duplicated; balancing cannot fix it.</p></div>
+
+<div class="card"><h2 style="margin-top:0">3. Little's Law</h2>
+<p class="note" style="margin-top:0">WIP = throughput x lead time. Fill exactly two boxes.</p>
+<div class="grid">
+<div><label for="lw">WIP (units)</label><input id="lw" type="number" step="any"></div>
+<div><label for="lt">Throughput (units per time)</label><input id="lt" type="number" step="any" value="100"></div>
+<div><label for="ll">Lead time (time)</label><input id="ll" type="number" step="any" value="2"></div>
+</div>
+<div class="stats" id="litOut" aria-live="polite"></div>
+<p class="note">Use consistent time units. It holds for any stable system on average, so a WIP cut shortens lead time only if throughput holds.</p></div>
+
+<div class="card"><h2 style="margin-top:0">4. Queue time from utilization (Kingman)</h2>
+<div class="grid">
+<div><label for="ku">Utilization (0 to 0.99)</label><input id="ku" type="number" min="0" max="0.99" step="0.01" value="0.9"></div>
+<div><label for="kt">Process time (min)</label><input id="kt" type="number" min="0" step="any" value="10"></div>
+<div><label for="ka">Arrival variability (CV)</label><input id="ka" type="number" min="0" step="0.1" value="1"></div>
+<div><label for="ks">Process variability (CV)</label><input id="ks" type="number" min="0" step="0.1" value="1"></div>
+</div>
+<div class="stats" id="kinOut" aria-live="polite"></div>
+<svg id="kinChart" role="img" aria-label="Cycle time versus utilization"></svg>
+<p class="note">Wq = ((CVa&sup2; + CVs&sup2;) / 2) x (u / (1 - u)) x process time. An approximation for one machine; it shows why queues explode as utilization nears 100% and why variability matters as much as capacity.</p></div>
+
+</main>
+<script src="lib/ops.js"></script>
+<script>
+var O=OpsTools,$=function(i){return document.getElementById(i)};
+function fmt(x,d){return isFinite(x)?x.toLocaleString(undefined,{maximumFractionDigits:d===undefined?1:d}):'n/a'}
+function stat(v,l,c){return '<div class="stat"><b class="'+(c||'')+'">'+v+'</b><span>'+l+'</span></div>'}
+function pct(x){return fmt(x*100,1)+'%'}
+function err(el,m){el.innerHTML='<span class="err">'+m+'</span>'}
+
+function calcOee(){
+  var el=$('oeeOut');
+  try{
+    var r=O.oee({plannedMin:+$('pl').value,downMin:+$('dn').value,idealCycleMin:+$('ic').value,totalCount:+$('tc').value,goodCount:+$('gc').value});
+    el.innerHTML=stat(pct(r.oee),'OEE',r.oee>=.85?'good':r.oee>=.6?'mid':'bad')+stat(pct(r.availability),'Availability')+stat(pct(r.performance),'Performance')+stat(pct(r.quality),'Quality')+
+      (r.warnings.length?'<p class="err" style="grid-column:1/-1">'+r.warnings[0]+'</p>':'');
+    var parts=[['Productive',r.loss.productive,'#0b6e4f'],['Quality loss',r.loss.quality,'#b54708'],['Speed loss',r.loss.speed,'#7a5af8'],['Downtime',r.loss.availability,'#b42318']];
+    var tot=parts.reduce(function(a,p){return a+p[1]},0),x=0,W=860,s='';
+    parts.forEach(function(p){var w=p[1]/tot*W;s+='<rect x="'+x+'" y="6" width="'+Math.max(w,0)+'" height="34" fill="'+p[2]+'"><title>'+p[0]+': '+fmt(p[1],0)+' min</title></rect>';
+      if(w>60)s+='<text x="'+(x+8)+'" y="28" font-size="13" fill="#fff">'+p[0]+' '+fmt(p[1],0)+'</text>';x+=w});
+    $('oeeBar').setAttribute('viewBox','0 0 '+W+' 46');$('oeeBar').innerHTML=s;
+  }catch(e){err(el,e.message);$('oeeBar').innerHTML=''}
+}
+function calcTakt(){
+  var el=$('takOut');
+  try{
+    var tk=O.takt(+$('av').value,+$('dm').value);
+    var tasks=$('tasks').value.split('\n').map(function(l){var p=l.split(',');return{name:(p[0]||'').trim(),time:parseFloat(p[1])}}).filter(function(t){return t.name||isFinite(t.time)});
+    if(tasks.some(function(t){return !isFinite(t.time)}))throw new Error('Each task line needs "name, minutes".');
+    var b=O.lineBalance(tasks,tk);
+    el.innerHTML=stat(fmt(tk,2)+' min','Takt time')+stat(fmt(b.totalWork,1)+' min','Total work')+stat(b.minStations,'Minimum stations')+stat(pct(b.efficiency),'Balance efficiency at that count')+
+      (b.tooLong.length?'<p class="err" style="grid-column:1/-1">Longer than takt: '+b.tooLong.join(', ')+'. Split or duplicate these.</p>':'');
+  }catch(e){err(el,e.message)}
+}
+function calcLittle(){
+  var el=$('litOut'),v=function(i){var x=$(i).value;return x===''?null:+x};
+  try{
+    var r=O.little({wip:v('lw'),throughput:v('lt'),leadTime:v('ll')});
+    el.innerHTML=stat(fmt(r.wip,2),'WIP')+stat(fmt(r.throughput,2),'Throughput')+stat(fmt(r.leadTime,2),'Lead time');
+  }catch(e){err(el,e.message)}
+}
+function calcKing(){
+  var el=$('kinOut'),base={processTime:+$('kt').value,cvArrival:+$('ka').value,cvService:+$('ks').value};
+  try{
+    var r=O.kingman(Object.assign({utilization:+$('ku').value},base));
+    el.innerHTML=stat(fmt(r.queueTime,1)+' min','Queue time')+stat(fmt(r.cycleTime,1)+' min','Cycle time')+stat(fmt(r.queueToProcess,1)+'x','Queue / process time');
+    var pts=[],W=860,H=210,l=48,rr=16,t=10,b=28,u;
+    for(u=0.05;u<=0.96;u+=0.01)pts.push([u,O.kingman(Object.assign({utilization:u},base)).cycleTime]);
+    var mx=Math.max.apply(null,pts.map(function(p){return p[1]})),X=function(u){return l+(u-0.05)/0.91*(W-l-rr)},Y=function(c){return t+(1-c/mx)*(H-t-b)};
+    var s='<polyline fill="none" stroke="#0b6e4f" stroke-width="2" points="'+pts.map(function(p){return X(p[0])+','+Y(p[1])}).join(' ')+'"/>';
+    var cu=+$('ku').value;if(cu>=0.05&&cu<=0.96)s+='<circle cx="'+X(cu)+'" cy="'+Y(r.cycleTime)+'" r="5" fill="#d92d20"/>';
+    [0.1,0.3,0.5,0.7,0.9].forEach(function(u){s+='<text x="'+X(u)+'" y="'+(H-8)+'" text-anchor="middle" font-size="12" fill="currentColor">'+Math.round(u*100)+'%</text>'});
+    s+='<text x="4" y="'+(t+10)+'" font-size="12" fill="currentColor">'+fmt(mx,0)+' min</text><text x="4" y="'+(H-b)+'" font-size="12" fill="currentColor">0</text>';
+    $('kinChart').setAttribute('viewBox','0 0 '+W+' '+H);$('kinChart').innerHTML=s;
+  }catch(e){err(el,e.message);$('kinChart').innerHTML=''}
+}
+['pl','dn','ic','tc','gc'].forEach(function(i){$(i).addEventListener('input',calcOee)});
+['av','dm','tasks'].forEach(function(i){$(i).addEventListener('input',calcTakt)});
+['lw','lt','ll'].forEach(function(i){$(i).addEventListener('input',calcLittle)});
+['ku','kt','ka','ks'].forEach(function(i){$(i).addEventListener('input',calcKing)});
+calcOee();calcTakt();calcLittle();calcKing();
+</script>
+</body></html>
