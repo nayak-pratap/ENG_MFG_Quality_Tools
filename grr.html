@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gage R%TITLE%R Study</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><nav aria-label="Tools" id="nav"><a href="index.html">Home</a></nav><script src="nav.js"></script>
+<h1>Gage R&amp;R (average and range)</h1>
+<p class="lead">Enter the readings from a crossed study. The tool separates measurement error from real part variation.</p></header>
+<main>
+<div class="card">
+<div class="grid">
+<div><label for="na">Appraisers</label><select id="na"><option>2</option><option selected>3</option></select></div>
+<div><label for="np">Parts (2 to 10)</label><input id="np" type="number" min="2" max="10" value="10"></div>
+<div><label for="nt">Trials</label><select id="nt"><option>2</option><option selected>3</option></select></div>
+<div><label for="tol">Tolerance (USL minus LSL, optional)</label><input id="tol" type="number" min="0" step="any"></div>
+</div>
+<p><button id="build">Set up grid</button> <button id="demo" class="sec">Load example</button> <button id="calc">Calculate</button></p>
+<div class="scroll"><table id="grid"></table></div>
+<p id="msg" class="err" role="alert"></p>
+</div>
+<div id="res" hidden>
+<div class="stats" id="out" aria-live="polite"></div>
+<div class="card scroll"><h2 style="margin-top:0">Share of total variation</h2><svg id="bar" role="img" aria-label="Variation shares"></svg></div>
+</div>
+<p class="note">Method: average and range, with constants 1/d2* from the standard MSA tables (2 to 3 appraisers, 2 to 3 trials, 2 to 10 parts). Repeatability (EV) is the average within-appraiser range times K1; reproducibility (AV) comes from the spread of appraiser averages, corrected for EV; part variation (PV) from the spread of part averages. %GRR = GRR / total variation. Common criteria (automotive practice): under 10% acceptable; 10 to 30% depends on application and cost; over 30% not acceptable; number of distinct categories should be at least 5. Always use parts that span the real process range, randomise the order, and make appraisers unaware of earlier readings. This method ignores appraiser-by-part interaction; use an ANOVA study when that matters.</p>
+</main>
+<script src="lib/qsys.js"></script>
+<script>
+var Q=QSys,$=function(i){return document.getElementById(i)};
+function f(x,d){return isFinite(x)?x.toFixed(d):'n/a'}
+function stat(v,l,c){return '<div class="stat"><b class="'+(c||'')+'">'+v+'</b><span>'+l+'</span></div>'}
+function dims(){return{A:+$('na').value,P:Math.round(+$('np').value),T:+$('nt').value}}
+function build(vals){
+  var d=dims(),h='<thead><tr><th>Appraiser</th><th>Part</th>';
+  for(var t=1;t<=d.T;t++)h+='<th>Trial '+t+'</th>';
+  h+='</tr></thead><tbody>';
+  for(var a=0;a<d.A;a++)for(var p=0;p<d.P;p++){
+    h+='<tr><td>'+String.fromCharCode(65+a)+'</td><td>'+(p+1)+'</td>';
+    for(var t2=0;t2<d.T;t2++)h+='<td><input type="number" step="any" data-a="'+a+'" data-p="'+p+'" data-t="'+t2+'" value="'+(vals?vals[a][p][t2]:'')+'" aria-label="Appraiser '+String.fromCharCode(65+a)+' part '+(p+1)+' trial '+(t2+1)+'" style="width:84px"></td>';
+    h+='</tr>';
+  }
+  $('grid').innerHTML=h+'</tbody>';
+}
+function collect(){
+  var d=dims(),data=[],a,p;
+  for(a=0;a<d.A;a++){data.push([]);for(p=0;p<d.P;p++)data[a].push(new Array(d.T))}
+  var bad=false;
+  Array.prototype.forEach.call(document.querySelectorAll('#grid input'),function(el){
+    var v=el.value===''?NaN:+el.value;if(!isFinite(v))bad=true;
+    data[+el.dataset.a][+el.dataset.p][+el.dataset.t]=v;
+  });
+  if(bad)throw new Error('Fill every cell with a number.');
+  return data;
+}
+// Example: seeded synthetic study (10 parts, 3 appraisers, 3 trials)
+function example(){
+  var seed=12345,r=function(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296};
+  var n=function(){var u=r()||1e-9;return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*r())};
+  var parts=[],i;for(i=0;i<10;i++)parts.push(25+i*0.9+0.2*n());
+  var ap=[0,0.08,-0.05],d=[];
+  for(var a=0;a<3;a++){d.push([]);for(var p=0;p<10;p++){d[a].push([]);for(var t=0;t<3;t++)d[a][p].push(Math.round((parts[p]+ap[a]+0.12*n())*100)/100)}}
+  return d;
+}
+function run(){
+  $('msg').textContent='';
+  try{
+    var g=Q.grr(collect(),{tolerance:+$('tol').value||0});
+    var c=g.verdict==='acceptable'?'good':g.verdict==='marginal'?'mid':'bad';
+    $('out').innerHTML=stat(f(g.pctGrr,1)+'%','%GRR (of total variation)',c)+stat(g.verdict,'Verdict by common criteria',c)+stat(g.ndc===Infinity?'many':g.ndc,'Distinct categories (want 5 or more)',g.ndc>=5?'good':'bad')+
+      stat(f(g.pctEv,1)+'%','Repeatability (EV)')+stat(f(g.pctAv,1)+'%','Reproducibility (AV)')+stat(f(g.pctPv,1)+'%','Part variation (PV)')+
+      (g.pctTolerance!==undefined?stat(f(g.pctTolerance,1)+'%','GRR as % of tolerance (6 sigma)'):'');
+    var W=860,x=0,s='';
+    [['Repeatability',g.pctEv,'#b54708'],['Reproducibility',g.pctAv,'#7a5af8'],['Part variation',g.pctPv,'#0b6e4f']].forEach(function(p){
+      var w=Math.max(0,p[1])/ (g.pctEv+g.pctAv+g.pctPv)*W;
+      s+='<rect x="'+x+'" y="6" width="'+w+'" height="34" fill="'+p[2]+'"><title>'+p[0]+' '+f(p[1],1)+'%</title></rect>';
+      if(w>90)s+='<text x="'+(x+8)+'" y="28" font-size="13" fill="#fff">'+p[0]+' '+f(p[1],1)+'%</text>';x+=w});
+    $('bar').setAttribute('viewBox','0 0 '+W+' 46');$('bar').innerHTML=s;
+    $('res').hidden=false;
+  }catch(e){$('msg').textContent=e.message;$('res').hidden=true}
+}
+$('build').addEventListener('click',function(){build();$('res').hidden=true});
+$('demo').addEventListener('click',function(){$('na').value=3;$('np').value=10;$('nt').value=3;build(example());run()});
+$('calc').addEventListener('click',run);
+build();
+</script>
+</body></html>

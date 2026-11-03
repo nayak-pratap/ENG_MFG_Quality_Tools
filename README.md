@@ -12,8 +12,13 @@ Static, dependency-free browser tools for shop-floor quality work. Open `index.h
 | `kanban.html` | Push vs CONWIP/kanban simulation with WIP sweep charts |
 | `vsm.html` | Current-state VSM arithmetic: lead time, value-added ratio, load vs takt |
 | `selector.html` | Symptom-based framework recommender (links to the frameworks site) |
+| `grr.html` | Gage R&R (average and range): EV, AV, PV, %GRR, distinct categories |
+| `pareto.html` | Pareto chart with vital-few cutoff |
+| `eightd.html` | 8D report builder with rule checker, Markdown export |
+| `ppap.html` | PPAP readiness tracker by submission level, CSV export |
+| `qfd.html` | QFD House-of-Quality scoring |
 
-All maths lives in `lib/qtools.js` (quality) and `lib/ops.js` (flow) and is covered by `npm test` (Node 18+).
+All maths lives in `lib/qtools.js` (quality) and `lib/ops.js` (flow) and `lib/qsys.js` (quality systems) and is covered by `npm test` (Node 18+).
 
 ## Method notes
 - Cp/Cpk use within-subgroup sigma (MRbar/1.128 or Rbar/d2); Pp/Ppk use the overall sample standard deviation.
@@ -26,4 +31,4 @@ All maths lives in `lib/qtools.js` (quality) and `lib/ops.js` (flow) and is cove
 Any static host works (GitHub Pages: Settings, Pages, deploy from branch `main`, root folder).
 
 ## Roadmap
-Demand-driven buffer sizing (DDMRP), CONWIP/POLCA card loops, 8D and APQP checklists.
+ANOVA Gage R&R, DDMRP buffer sizing, CONWIP/POLCA card loops, control-plan builder.

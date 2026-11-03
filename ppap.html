@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PPAP Readiness Tracker</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><nav aria-label="Tools" id="nav"><a href="index.html">Home</a></nav><script src="nav.js"></script>
+<h1>PPAP readiness tracker</h1>
+<p class="lead">Track the 17 listed PPAP elements for a part and see what blocks submission at the level your customer requires.</p></header>
+<main>
+<div class="card">
+<div class="grid">
+<div><label for="part">Part / customer</label><input id="part"></div>
+<div><label for="lvl">Submission level</label><select id="lvl"><option value="1">Level 1: PSW only</option><option value="2">Level 2: PSW, samples, limited data</option><option value="3" selected>Level 3: PSW, samples, complete data</option><option value="4">Level 4: PSW plus customer-defined</option><option value="5">Level 5: complete data reviewed at supplier</option></select></div>
+</div>
+<div class="stats" id="out" aria-live="polite"></div>
+<div class="scroll"><table id="tbl"><thead><tr><th>Element</th><th>Status</th><th>Owner</th></tr></thead><tbody></tbody></table></div>
+<p><button id="csv" class="sec">Export CSV</button> <button id="clr" class="sec">Reset</button></p>
+</div>
+<p class="note">Elements as listed in a common PPAP guide: the Design FMEA and Process FMEA are counted separately, giving 17 (some sources say "up to 18" because they split items differently). Level 3 is the usual default; Levels 2 and 4 are defined by the customer, so confirm requirements with them. Mark an element N/A only where the customer or the part makes it not applicable. This tracks status; it does not judge whether each document is adequate. Data is saved only in this browser.</p>
+</main>
+<script src="lib/qsys.js"></script>
+<script>
+var Q=QSys,$=function(i){return document.getElementById(i)},KEY='ppap-v1';
+var ST=[['notstarted','Not started'],['inprogress','In progress'],['done','Done'],['na','N/A']];
+var S={part:'',lvl:3,items:{},owners:{}};
+function load(){try{var x=JSON.parse(localStorage.getItem(KEY)||'null');if(x)S=x}catch(e){}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function render(){
+  $('part').value=S.part||'';$('lvl').value=S.lvl;
+  var tb=$('tbl').tBodies[0];tb.innerHTML='';
+  Q.PPAP_ELEMENTS.forEach(function(e){
+    var tr=document.createElement('tr'),cur=S.items[e.id]||'notstarted';
+    tr.innerHTML='<td>'+esc(e.name)+'</td><td><select data-id="'+e.id+'" aria-label="Status of '+esc(e.name)+'">'+ST.map(function(s){return '<option value="'+s[0]+'"'+(s[0]===cur?' selected':'')+'>'+s[1]+'</option>'}).join('')+'</select></td><td><input data-own="'+e.id+'" value="'+esc(S.owners[e.id]||'')+'" aria-label="Owner of '+esc(e.name)+'"></td>';
+    tb.appendChild(tr);
+  });
+  calc();
+}
+function calc(){
+  var items=Q.PPAP_ELEMENTS.map(function(e){return{id:e.id,status:S.items[e.id]||'notstarted'}});
+  var r=Q.ppap(items,+S.lvl),names={};Q.PPAP_ELEMENTS.forEach(function(e){names[e.id]=e.name});
+  $('out').innerHTML='<div class="stat"><b class="'+(r.ready?'good':'mid')+'">'+r.done+' of '+r.required+'</b><span>Required elements done</span></div><div class="stat"><b>'+Math.round(r.pct)+'%</b><span>Complete</span></div><div class="stat"><b class="'+(r.ready?'good':'bad')+'">'+(r.ready?'Ready':'Not ready')+'</b><span>For Level '+S.lvl+'</span></div>'+
+   (r.open.length?'<p style="grid-column:1/-1" class="note"><b>Open:</b> '+r.open.map(function(id){return esc(names[id])}).join('; ')+'</p>':'')+
+   (r.note?'<p style="grid-column:1/-1" class="err">'+esc(r.note)+'</p>':'');
+}
+$('part').addEventListener('input',function(){S.part=this.value;save()});
+$('lvl').addEventListener('change',function(){S.lvl=+this.value;save();calc()});
+$('tbl').addEventListener('change',function(e){var id=e.target.dataset.id;if(id){S.items[id]=e.target.value;save();calc()}});
+$('tbl').addEventListener('input',function(e){var id=e.target.dataset.own;if(id){S.owners[id]=e.target.value;save()}});
+$('clr').addEventListener('click',function(){if(confirm('Reset all statuses?')){S={part:'',lvl:3,items:{},owners:{}};save();render()}});
+$('csv').addEventListener('click',function(){
+  var q=function(s){s=String(s);if(/^[=+\-@]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"'};
+  var out=['Element,Status,Owner'].concat(Q.PPAP_ELEMENTS.map(function(e){return [q(e.name),S.items[e.id]||'notstarted',q(S.owners[e.id]||'')].join(',')}));
+  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([out.join('\n')],{type:'text/csv'}));a.download='ppap-status.csv';a.click();
+});
+load();render();
+</script>
+</body></html>

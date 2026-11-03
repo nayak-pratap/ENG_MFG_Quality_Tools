@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>8D Report Builder</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><nav aria-label="Tools" id="nav"><a href="index.html">Home</a></nav><script src="nav.js"></script>
+<h1>8D report builder</h1>
+<p class="lead">Fill each discipline in order. The checker flags the rules that most often get skipped: escape cause, containment, and verification before release.</p></header>
+<main>
+<div class="card" id="form"></div>
+<div class="card"><h2 style="margin-top:0">Rule check</h2><div id="chk" aria-live="polite"></div>
+<p><button id="md">Download as Markdown</button> <button id="clr" class="sec">Clear</button></p></div>
+<p class="note">Based on the 8D disciplines D0 to D8 as commonly practised. Containment (D3) stays until D6 proves the permanent fix; D4 must find both why the defect occurred and why detection missed it; D7 updates FMEA, control plan and work instructions so the failure cannot return elsewhere. Timing targets differ by customer; follow yours. Your text is saved only in this browser.</p>
+</main>
+<script src="lib/qsys.js"></script>
+<script>
+var Q=QSys,$=function(i){return document.getElementById(i)},KEY='8d-v1';
+var FIELDS=[
+ ['d0','D0 Plan and prepare','Is an 8D warranted? Initial symptoms, data, emergency response needed?'],
+ ['d1','D1 Team','Names, roles, leader, authority to act.'],
+ ['d2','D2 Problem description','What, where, when, how many; is / is not.'],
+ ['d3','D3 Interim containment','Sort, quarantine, rework; who, where, since when.'],
+ ['causeOccurrence','D4 Cause of occurrence','Why did the defect happen? Evidence that it is the cause.'],
+ ['causeEscape','D4 Cause of escape','Why did detection miss it?'],
+ ['d5','D5 Permanent corrective action','Chosen actions and how you verified they remove the cause without side effects.'],
+ ['d6','D6 Implementation and validation','Roll-out date and data showing the defect is gone.'],
+ ['d7','D7 Prevent recurrence','FMEA, control plan, work instructions, other lines or parts updated.'],
+ ['d8','D8 Close and recognise team','Lessons learned; contributors acknowledged.']
+];
+var r={};
+function load(){try{r=JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){r={}}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(r))}catch(e){}}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function build(){
+  $('form').innerHTML='<div class="grid"><div><label for="title">Title / part / customer</label><input id="title" value="'+esc(r.title||'')+'"></div></div>'+
+   FIELDS.map(function(x){return '<div style="margin-top:12px"><label for="'+x[0]+'">'+x[1]+'</label><textarea id="'+x[0]+'" data-k="'+x[0]+'" placeholder="'+esc(x[2])+'" style="min-height:70px">'+esc(r[x[0]]||'')+'</textarea></div>'}).join('')+
+   '<p style="margin-top:12px"><label style="display:inline"><input type="checkbox" id="verified" style="width:auto"> Permanent fix verified with data</label><br><label style="display:inline"><input type="checkbox" id="removed" style="width:auto"> Containment removed</label></p>';
+  $('verified').checked=!!r.verified;$('removed').checked=!!r.containmentRemoved;
+}
+function check(){
+  var issues=Q.eightD(r);
+  $('chk').innerHTML=issues.length?'<ul>'+issues.map(function(i){return '<li class="bad">'+esc(i)+'</li>'}).join('')+'</ul>':'<p class="good"><b>No rule problems. Ready to close.</b></p>';
+}
+$('form').addEventListener('input',function(e){var el=e.target;
+  if(el.id==='title')r.title=el.value;else if(el.id==='verified')r.verified=el.checked;else if(el.id==='removed')r.containmentRemoved=el.checked;else if(el.dataset.k)r[el.dataset.k]=el.value;
+  save();check()});
+$('md').addEventListener('click',function(){
+  var out=['# 8D report: '+(r.title||'untitled'),''];
+  FIELDS.forEach(function(x){out.push('## '+x[1],'',r[x[0]]||'_not recorded_','')});
+  out.push('Permanent fix verified: '+(r.verified?'yes':'no'),'Containment removed: '+(r.containmentRemoved?'yes':'no'),'');
+  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([out.join('\n')],{type:'text/markdown'}));a.download='8d-report.md';a.click();
+});
+$('clr').addEventListener('click',function(){if(confirm('Clear the whole report?')){r={};save();build();check()}});
+load();build();check();
+</script>
+</body></html>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pareto Chart</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><nav aria-label="Tools" id="nav"><a href="index.html">Home</a></nav><script src="nav.js"></script>
+<h1>Pareto chart</h1>
+<p class="lead">Paste categories and counts. See which few causes account for most of the problem.</p></header>
+<main>
+<div class="card">
+<label for="data">One per line: <code>category, count</code></label>
+<textarea id="data" spellcheck="false">Burr on edge, 46
+Out of tolerance (diameter), 31
+Surface finish, 14
+Coating flaking, 6
+Wrong marking, 3
+Other, 2</textarea>
+<div class="grid" style="margin-top:10px"><div><label for="cut">Vital-few cutoff (% cumulative)</label><input id="cut" type="number" min="50" max="95" value="80"></div></div>
+<p style="margin-bottom:0"><button id="go">Draw</button></p><p id="msg" class="err" role="alert"></p>
+</div>
+<div id="res" hidden>
+<div class="stats" id="out" aria-live="polite"></div>
+<div class="card scroll"><svg id="c" role="img" aria-label="Pareto chart"></svg></div>
+<div class="card scroll"><table id="t"></table></div>
+</div>
+<p class="note">The vital few are the categories needed to reach the cutoff (80% by default; a rule of thumb, not a law). Count by what matters: if one category is cheap and another very costly, rank by cost or downtime minutes, not occurrences. Re-draw after each improvement; the order often changes.</p>
+</main>
+<script src="lib/qsys.js"></script>
+<script>
+var Q=QSys,$=function(i){return document.getElementById(i)};
+function f(x,d){return x.toFixed(d)}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function run(){
+  $('msg').textContent='';
+  try{
+    var items=$('data').value.split('\n').map(function(l){var i=l.lastIndexOf(',');return i<0?null:{name:l.slice(0,i).trim(),count:parseFloat(l.slice(i+1))}}).filter(Boolean);
+    if(items.some(function(i){return !isFinite(i.count)||i.count<0}))throw new Error('Each line needs "category, count" with a count of zero or more.');
+    var p=Q.pareto(items,+$('cut').value);
+    if(!p.rows.length)throw new Error('Enter at least one category with a count above zero.');
+    var top=p.rows.slice(0,p.vitalFew);
+    $('out').innerHTML='<div class="stat"><b>'+p.total+'</b><span>Total</span></div><div class="stat"><b class="good">'+p.vitalFew+' of '+p.rows.length+'</b><span>Categories reach '+$('cut').value+'%</span></div><div class="stat"><b>'+f(top[top.length-1].cumPct,1)+'%</b><span>Cumulative share reached</span></div>';
+    var W=860,H=300,l=48,r=48,t=14,b=96,n=p.rows.length,bw=(W-l-r)/n,max=p.rows[0].count,s='';
+    var Y=function(v){return t+(1-v/max)*(H-t-b)},YP=function(v){return t+(1-v/100)*(H-t-b)};
+    p.rows.forEach(function(row,i){
+      var x=l+i*bw,vital=i<p.vitalFew;
+      s+='<rect x="'+(x+4)+'" y="'+Y(row.count)+'" width="'+(bw-8)+'" height="'+(H-b-Y(row.count))+'" fill="'+(vital?'#0b6e4f':'#98a2b3')+'"><title>'+esc(row.name)+': '+row.count+' ('+f(row.pct,1)+'%)</title></rect>';
+      s+='<text transform="translate('+(x+bw/2)+','+(H-b+10)+') rotate(40)" font-size="12" fill="currentColor">'+esc(row.name.length>22?row.name.slice(0,21)+'…':row.name)+'</text>';
+    });
+    s+='<polyline fill="none" stroke="#b42318" stroke-width="2" points="'+p.rows.map(function(row,i){return (l+i*bw+bw/2)+','+YP(row.cumPct)}).join(' ')+'"/>';
+    p.rows.forEach(function(row,i){s+='<circle cx="'+(l+i*bw+bw/2)+'" cy="'+YP(row.cumPct)+'" r="3.5" fill="#b42318"/>'});
+    s+='<line x1="'+l+'" x2="'+(W-r)+'" y1="'+YP(+$('cut').value)+'" y2="'+YP(+$('cut').value)+'" stroke="currentColor" stroke-opacity=".5" stroke-dasharray="5 4"/>';
+    s+='<text x="'+(W-r+4)+'" y="'+(YP(100)+4)+'" font-size="12" fill="currentColor">100%</text><text x="4" y="'+(t+10)+'" font-size="12" fill="currentColor">'+max+'</text>';
+    $('c').setAttribute('viewBox','0 0 '+W+' '+H);$('c').innerHTML=s;
+    $('t').innerHTML='<thead><tr><th>Category</th><th>Count</th><th>Share</th><th>Cumulative</th></tr></thead><tbody>'+p.rows.map(function(row){return '<tr><td>'+esc(row.name)+'</td><td>'+row.count+'</td><td>'+f(row.pct,1)+'%</td><td>'+f(row.cumPct,1)+'%</td></tr>'}).join('')+'</tbody>';
+    $('res').hidden=false;
+  }catch(e){$('msg').textContent=e.message;$('res').hidden=true}
+}
+$('go').addEventListener('click',run);run();
+</script>
+</body></html>
