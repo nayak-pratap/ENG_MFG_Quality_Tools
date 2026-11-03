@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SPC and Process Capability</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><nav aria-label="Tools"><a href="index.html">Home</a><a href="spc.html" aria-current="page">SPC and capability</a><a href="fmea.html">FMEA worksheet</a><a href="sigma.html">DPMO and sigma</a></nav>
+<h1>SPC and process capability</h1>
+<p class="lead">Paste measurements in time order. Check stability on the chart first, then read capability.</p></header>
+<main>
+<div class="card">
+<label for="data">Measurements (commas, spaces or new lines)</label>
+<textarea id="data" spellcheck="false"></textarea>
+<div class="grid" style="margin-top:10px">
+<div><label for="type">Chart</label><select id="type"><option value="imr">Individuals (I-MR)</option><option value="xbar">Xbar-R (subgroups)</option></select></div>
+<div id="nwrap" hidden><label for="n">Subgroup size (2 to 10)</label><input id="n" type="number" min="2" max="10" value="5"></div>
+<div><label for="lsl">Lower spec limit (optional)</label><input id="lsl" type="number" step="any"></div>
+<div><label for="usl">Upper spec limit (optional)</label><input id="usl" type="number" step="any"></div>
+</div>
+<p style="margin-bottom:0"><button id="go">Analyze</button> <button id="demo" class="sec">Load example</button></p>
+<p id="msg" class="err" role="alert"></p>
+</div>
+<div id="result" hidden>
+<div class="stats" id="cap"></div>
+<div class="card scroll"><h2 style="margin-top:0" id="t1"></h2><svg id="c1" role="img" aria-label="Control chart"></svg></div>
+<div class="card scroll"><h2 style="margin-top:0" id="t2"></h2><svg id="c2" role="img" aria-label="Range chart"></svg></div>
+<div class="card"><h2 style="margin-top:0">Signals</h2><div id="sig"></div></div>
+</div>
+<p class="note">Signals use Nelson rules 1 to 3: a point beyond 3 sigma, nine in a row on one side of the centre line, six in a row rising or falling. Cp and Cpk use within-subgroup sigma; Pp and Ppk use the overall standard deviation. Expected PPM assumes a normal distribution.</p>
+</main>
+<script src="lib/qtools.js"></script>
+<script>
+var Q=QTools,$=function(i){return document.getElementById(i)};
+var DEMO='10.02 10.05 9.98 10.01 10.04 9.97 10.00 10.03 10.06 9.99 10.01 10.02 9.96 10.04 10.00 10.05 9.98 10.03 10.01 10.12 10.00 9.99 10.02 10.04 9.97';
+function f(x,d){return isFinite(x)?x.toFixed(d===undefined?3:d):'n/a'}
+function stat(v,l,c){return '<div class="stat"><b class="'+(c||'')+'">'+v+'</b><span>'+l+'</span></div>'}
+function cls(v){return !isFinite(v)?'':v>=1.33?'good':v>=1?'mid':'bad'}
+function draw(svg,pts,cl,ucl,lcl,flags,color){
+  var W=860,H=240,l=54,r=70,t=12,b=26,n=pts.length;
+  var lo=Math.min.apply(null,pts.concat([lcl])),hi=Math.max.apply(null,pts.concat([ucl]));
+  var pad=(hi-lo)*.08||1;lo-=pad;hi+=pad;
+  var X=function(i){return l+(n<2?0:i*(W-l-r)/(n-1))},Y=function(v){return t+(hi-v)*(H-t-b)/(hi-lo)};
+  var s='';
+  [[ucl,'UCL'],[cl,'CL'],[lcl,'LCL']].forEach(function(a){
+    s+='<line x1="'+l+'" x2="'+(W-r)+'" y1="'+Y(a[0])+'" y2="'+Y(a[0])+'" stroke="currentColor" stroke-opacity="'+(a[1]==='CL'?.5:.7)+'" stroke-dasharray="'+(a[1]==='CL'?'':'5 4')+'"/>';
+    s+='<text x="'+(W-r+6)+'" y="'+(Y(a[0])+4)+'" font-size="12" fill="currentColor">'+a[1]+' '+f(a[0],3)+'</text>';
+  });
+  s+='<polyline fill="none" stroke="'+color+'" stroke-width="1.5" points="'+pts.map(function(v,i){return X(i)+','+Y(v)}).join(' ')+'"/>';
+  var bad={};flags.forEach(function(x){bad[x.index]=1});
+  pts.forEach(function(v,i){s+='<circle cx="'+X(i)+'" cy="'+Y(v)+'" r="'+(bad[i]?5.5:3)+'" fill="'+(bad[i]?'#d92d20':color)+'"><title>#'+(i+1)+': '+f(v,4)+'</title></circle>'});
+  s+='<text x="'+l+'" y="'+(H-6)+'" font-size="12" fill="currentColor">Point 1</text><text x="'+(W-r)+'" y="'+(H-6)+'" text-anchor="end" font-size="12" fill="currentColor">Point '+n+'</text>';
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.innerHTML=s;
+}
+function run(){
+  $('msg').textContent='';
+  var x=Q.parseNumbers($('data').value),type=$('type').value,n=+$('n').value;
+  var need=type==='imr'?8:2*n;
+  if(x.length<need){$('msg').textContent='Need at least '+need+' valid numbers for this chart (found '+x.length+').';$('result').hidden=true;return}
+  var c;
+  try{c=type==='imr'?Q.imr(x):Q.xbarR(x,n)}catch(e){$('msg').textContent=e.message;return}
+  if(!(c.sigmaWithin>0)){$('msg').textContent='Data has no variation; limits cannot be computed.';$('result').hidden=true;return}
+  var sigX=(c.ucl-c.cl)/3,sigR=(c.range.ucl-c.range.cl)/3;
+  var fl=Q.nelson(c.points,c.cl,sigX);
+  var fr=Q.nelson(c.range.points,c.range.cl,sigR).filter(function(v){return v.rule===1});
+  var lsl=parseFloat($('lsl').value),usl=parseFloat($('usl').value);
+  if(isFinite(lsl)&&isFinite(usl)&&lsl>=usl){$('msg').textContent='Lower spec limit must be below the upper limit.';$('result').hidden=true;return}
+  var cap=Q.capability(x,c.sigmaWithin,lsl,usl);
+  var h=stat(f(cap.mean,4),'Mean')+stat(f(cap.sigmaWithin,4),'Sigma within')+stat(f(cap.sigmaOverall,4),'Sigma overall');
+  if(isFinite(lsl)||isFinite(usl)){
+    h+=stat(f(cap.Cp,2),'Cp',cls(cap.Cp))+stat(f(cap.Cpk,2),'Cpk',cls(cap.Cpk))+stat(f(cap.Pp,2),'Pp',cls(cap.Pp))+stat(f(cap.Ppk,2),'Ppk',cls(cap.Ppk))+stat(isFinite(cap.expectedPpm)?Math.round(cap.expectedPpm).toLocaleString():'n/a','Expected PPM out of spec');
+  }
+  $('cap').innerHTML=h;
+  $('t1').textContent=(type==='imr'?'Individuals chart':'Xbar chart (n='+n+')');
+  $('t2').textContent=type==='imr'?'Moving range chart':'Range chart';
+  draw($('c1'),c.points,c.cl,c.ucl,c.lcl,fl,'#0b6e4f');
+  draw($('c2'),c.range.points,c.range.cl,c.range.ucl,c.range.lcl,fr,'#475467');
+  var names={1:'point beyond 3 sigma',2:'nine in a row on one side',3:'six in a row trending'};
+  var li=fl.map(function(v){return '<li>Point '+(v.index+1)+': rule '+v.rule+', '+names[v.rule]+'</li>'}).concat(fr.map(function(v){return '<li>Range point '+(v.index+1)+': beyond 3 sigma</li>'}));
+  $('sig').innerHTML=li.length?'<p class="bad"><b>Process is not in statistical control.</b> Find and remove the special causes before trusting capability.</p><ul>'+li.join('')+'</ul>':'<p class="good"><b>No signals from rules 1 to 3.</b></p>';
+  $('result').hidden=false;
+}
+$('type').addEventListener('change',function(){$('nwrap').hidden=$('type').value!=='xbar'});
+$('go').addEventListener('click',run);
+$('demo').addEventListener('click',function(){$('data').value=DEMO;$('lsl').value='9.9';$('usl').value='10.1';run()});
+</script>
+</body></html>

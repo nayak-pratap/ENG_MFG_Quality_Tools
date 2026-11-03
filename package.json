@@ -1,0 +1,8 @@
+{
+  "name": "mfg-quality-tools",
+  "version": "0.1.0",
+  "description": "Browser-based SPC, process capability, FMEA and sigma-level tools for manufacturing",
+  "license": "MIT",
+  "scripts": { "test": "node --test test/", "start": "python3 -m http.server 8080" },
+  "engines": { "node": ">=18" }
+}

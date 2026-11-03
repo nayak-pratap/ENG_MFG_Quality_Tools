@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FMEA Worksheet</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><nav aria-label="Tools"><a href="index.html">Home</a><a href="spc.html">SPC and capability</a><a href="fmea.html" aria-current="page">FMEA worksheet</a><a href="sigma.html">DPMO and sigma</a></nav>
+<h1>FMEA worksheet</h1>
+<p class="lead">Rate each failure mode 1 to 10 for severity (S), occurrence (O) and detection (D, where 10 means hardest to detect).</p></header>
+<main>
+<div class="card scroll">
+<table id="tbl"><thead><tr><th>Process step</th><th>Failure mode</th><th>Effect</th><th>Cause</th><th>S</th><th>O</th><th>D</th><th>RPN</th><th>AP</th><th><span class="sr" style="position:absolute;left:-9999px">Remove</span></th></tr></thead><tbody></tbody></table>
+<p><button id="add">Add row</button> <button id="sort" class="sec">Sort by priority</button> <button id="csv" class="sec">Export CSV</button> <button id="clr" class="sec">Clear all</button></p>
+<p id="msg" class="err" role="alert"></p>
+</div>
+<div class="card"><h2 style="margin-top:0">Use your licensed Action Priority table</h2>
+<p class="note">The AIAG-VDA Action Priority table is copyrighted and is not bundled here. If you have it, save it as a CSV with the header <code>S,O,D,AP</code> and one row per combination, then load it. Rows it does not cover fall back to the illustrative rule.</p>
+<input id="aptab" type="file" accept=".csv,text/csv" aria-label="AP table CSV"> <span id="apstate" class="note"></span></div>
+<p class="note"><b>Why not RPN alone:</b> S=10, O=2, D=5; S=2, O=5, D=10; and S=4, O=5, D=5 all give RPN 100, yet they are very different risks. The illustrative AP column weights severity first. Reduce severity only by design or process change; actions usually target occurrence or detection, then re-rate.</p>
+</main>
+<script src="lib/qtools.js"></script>
+<script>
+var Q=QTools,$=function(i){return document.getElementById(i)};
+var KEY='fmea-rows-v1',rows=[],apFn=null;
+function load(){try{rows=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){rows=[]}if(!rows.length)rows=[blank()]}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(rows))}catch(e){}}
+function blank(){return{step:'',mode:'',effect:'',cause:'',s:5,o:5,d:5}}
+function clamp(v){v=Math.round(+v);return isFinite(v)?Math.min(10,Math.max(1,v)):1}
+function ap(r){var v=apFn&&apFn(r.s,r.o,r.d);return v||Q.apIllustrative(r.s,r.o,r.d)}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function render(){
+  var tb=$('tbl').tBodies[0];tb.innerHTML='';
+  rows.forEach(function(r,i){
+    var a=ap(r),c=a==='H'?'bad':a==='M'?'mid':'good';
+    var tr=document.createElement('tr');
+    tr.innerHTML=['step','mode','effect','cause'].map(function(k){return '<td><input data-i="'+i+'" data-k="'+k+'" value="'+esc(r[k])+'" aria-label="'+k+' row '+(i+1)+'"></td>'}).join('')+
+      ['s','o','d'].map(function(k){return '<td><input type="number" min="1" max="10" data-i="'+i+'" data-k="'+k+'" value="'+r[k]+'" aria-label="'+k.toUpperCase()+' row '+(i+1)+'"></td>'}).join('')+
+      '<td class="rpn">'+Q.rpn(r.s,r.o,r.d)+'</td><td class="ap"><span class="tag '+c+'">'+a+'</span></td><td><button class="sec" data-del="'+i+'" aria-label="Remove row '+(i+1)+'">&times;</button></td>';
+    tb.appendChild(tr);
+  });
+}
+function refreshCalc(i){
+  var tr=$('tbl').tBodies[0].rows[i],r=rows[i],a=ap(r);
+  tr.querySelector('.rpn').textContent=Q.rpn(r.s,r.o,r.d);
+  var t=tr.querySelector('.tag');t.textContent=a;t.className='tag '+(a==='H'?'bad':a==='M'?'mid':'good');
+}
+$('tbl').addEventListener('input',function(e){
+  var el=e.target,i=el.dataset.i,k=el.dataset.k;if(i===undefined)return;
+  rows[i][k]=('sod'.indexOf(k)>=0)?clamp(el.value):el.value;
+  save();refreshCalc(i);
+});
+$('tbl').addEventListener('change',function(e){var el=e.target;if('sod'.indexOf(el.dataset.k)>=0){el.value=rows[el.dataset.i][el.dataset.k]}});
+$('tbl').addEventListener('click',function(e){var d=e.target.dataset.del;if(d===undefined)return;rows.splice(+d,1);if(!rows.length)rows.push(blank());save();render()});
+$('add').addEventListener('click',function(){rows.push(blank());save();render()});
+$('sort').addEventListener('click',function(){var w={H:3,M:2,L:1};rows.sort(function(a,b){return w[ap(b)]-w[ap(a)]||b.s-a.s||Q.rpn(b.s,b.o,b.d)-Q.rpn(a.s,a.o,a.d)});save();render()});
+$('clr').addEventListener('click',function(){if(confirm('Remove all rows?')){rows=[blank()];save();render()}});
+$('csv').addEventListener('click',function(){
+  var q=function(s){s=String(s);if(/^[=+\-@]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"'};
+  var out=['Process step,Failure mode,Effect,Cause,S,O,D,RPN,AP'].concat(rows.map(function(r){return [q(r.step),q(r.mode),q(r.effect),q(r.cause),r.s,r.o,r.d,Q.rpn(r.s,r.o,r.d),ap(r)].join(',')}));
+  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([out.join('\n')],{type:'text/csv'}));a.download='fmea.csv';a.click();
+});
+$('aptab').addEventListener('change',function(e){
+  var file=e.target.files[0];if(!file)return;
+  var rd=new FileReader();rd.onload=function(){apFn=Q.parseApTable(rd.result);var n=0;for(var s=1;s<=10;s++)for(var o=1;o<=10;o++)for(var d=1;d<=10;d++)if(apFn(s,o,d))n++;
+    $('apstate').textContent=n+' of 1000 combinations loaded.';if(!n){apFn=null;$('apstate').textContent='No valid rows found; check the S,O,D,AP header.'}render()};
+  rd.readAsText(file);
+});
+load();render();
+</script>
+</body></html>

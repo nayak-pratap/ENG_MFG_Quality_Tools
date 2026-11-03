@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DPMO and Sigma Level</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><nav aria-label="Tools"><a href="index.html">Home</a><a href="spc.html">SPC and capability</a><a href="fmea.html">FMEA worksheet</a><a href="sigma.html" aria-current="page">DPMO and sigma</a></nav>
+<h1>DPMO and sigma level</h1>
+<p class="lead">Defects per million opportunities, yield and sigma level.</p></header>
+<main>
+<div class="card"><h2 style="margin-top:0">From counts</h2>
+<div class="grid">
+<div><label for="def">Defects found</label><input id="def" type="number" min="0" value="25"></div>
+<div><label for="uni">Units inspected</label><input id="uni" type="number" min="1" value="500"></div>
+<div><label for="opp">Opportunities per unit</label><input id="opp" type="number" min="1" value="10"></div>
+<div><label for="shift">Sigma shift</label><input id="shift" type="number" step="0.1" value="1.5"></div>
+</div>
+<div class="stats" id="out1" aria-live="polite"></div></div>
+<div class="card"><h2 style="margin-top:0">From a sigma level</h2>
+<div class="grid"><div><label for="sg">Sigma level</label><input id="sg" type="number" step="0.1" value="4"></div></div>
+<div class="stats" id="out2" aria-live="polite"></div></div>
+<p class="note">Each unit counts only the opportunities that can actually fail and be detected. Inflating opportunities makes DPMO look better without improving the process.</p>
+</main>
+<script src="lib/qtools.js"></script>
+<script>
+var $=function(i){return document.getElementById(i)};
+function fmt(x,d){return isFinite(x)?x.toLocaleString(undefined,{maximumFractionDigits:d}):'n/a'}
+function stat(v,l,c){return '<div class="stat"><b class="'+(c||'')+'">'+v+'</b><span>'+l+'</span></div>'}
+function calc1(){
+  var d=+$('def').value,u=+$('uni').value,o=+$('opp').value,sh=+$('shift').value;
+  if(!(u>0&&o>0&&d>=0)){$('out1').innerHTML='<span class="err">Enter non-negative defects and positive units and opportunities.</span>';return}
+  var p=Q.dpmo(d,u,o);
+  if(p>=1e6){$('out1').innerHTML='<span class="err">Defect rate cannot exceed 100%; check the inputs.</span>';return}
+  var s=p===0?NaN:Q.sigmaFromDpmo(p,sh);
+  $('out1').innerHTML=stat(fmt(p,1),'DPMO')+stat(fmt(Q.yieldFromDpmo(p)*100,4)+'%','Yield')+stat(p===0?'no defects':fmt(s,2),'Sigma level')+stat(fmt(d/u,4),'Defects per unit');
+}
+function calc2(){
+  var s=+$('sg').value,sh=+$('shift').value;
+  var p=Q.dpmoFromSigma(s,sh);
+  $('out2').innerHTML=stat(fmt(p,1),'DPMO')+stat(fmt(Q.yieldFromDpmo(p)*100,5)+'%','Yield');
+}
+var Q=QTools;
+['def','uni','opp','shift'].forEach(function(i){$(i).addEventListener('input',function(){calc1();calc2()})});
+$('sg').addEventListener('input',calc2);calc1();calc2();
+</script>
+</body></html>
