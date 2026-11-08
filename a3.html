@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>A3 Builder</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><nav aria-label="Tools" id="nav"><a href="index.html">Home</a></nav><script src="nav.js"></script>
+<h1>A3 builder</h1>
+<p class="lead">Work the seven boxes in order. The checker looks for the things that make an A3 look finished without being any good: no numbers in the current condition, countermeasures written before any analysis, and no date to check the result.</p></header>
+<main>
+<div class="card">
+<div class="grid">
+<div><label for="title">Problem title</label><input id="title" placeholder="Insert chipping on grade X"></div>
+<div><label for="owner">Owner</label><input id="owner"></div>
+<div><label for="date">Date</label><input id="date" type="date"></div>
+</div>
+</div>
+<div id="form"></div>
+<div class="card">
+<p style="margin-top:0"><label style="display:inline"><input type="checkbox" id="gemba" style="width:auto"> I have gone to see the work</label><br>
+<label style="display:inline"><input type="checkbox" id="owned" style="width:auto"> Each action in the plan has one named owner</label></p>
+<div class="grid"><div><label for="fdate">Follow-up date</label><input id="fdate" type="date"></div></div>
+</div>
+<div class="card"><h2 style="margin-top:0">Review</h2>
+<div class="stats" id="stats" aria-live="polite"></div>
+<div id="chk"></div>
+<p><button id="md">Download as Markdown</button> <button id="ex" class="sec">Load example</button> <button id="clr" class="sec">Clear</button></p>
+</div>
+<p class="note">An A3 is a thinking document, not a form, and its value is in the conversation that produces it. The checker cannot judge whether your analysis is any good; it only catches the structural misses. Two rules it enforces as blockers: a current condition needs numbers, because without a measured starting point there is no gap and nothing to verify later; and countermeasures need a follow-up date, because an A3 closed without a check is a guess. Use this for a recurring problem whose cause is unclear. A customer escape wants an <a href="eightd.html">8D</a> instead, a small local fix wants <a href="kaizen.html">kaizen</a>, and a data-heavy variation problem wants DMAIC. Your text stays in this browser.</p>
+</main>
+<script src="lib/solve.js"></script>
+<script>
+var S=SolveTools,$=function(i){return document.getElementById(i)},KEY='a3-v1';
+var r={};
+var EX={title:'Insert chipping on grade X',owner:'Ravi',
+ background:'Customer returns for chipped edges rose through Q3. Ties to the plant objective of halving external quality cost.',
+ current:'Chipping found on 4.2% of inserts from line 2, measured over 3 weeks (n=1,840), against a 1% internal standard. Concentrated on the night shift.',
+ goal:'Below 1% chipping on line 2 by 28 February 2027, held for 8 weeks.',
+ analysis:'Edge radius drifts as the grinding wheel wears. Wheels are changed on a fixed weekly schedule rather than on measured condition, so the last two days of each cycle run outside the radius window. Confirmed by measuring radius against wheel age on 40 parts.',
+ countermeasures:'Change wheels on measured edge radius rather than on schedule. Add a radius check to the setup standard. Trial on line 2 for four weeks before extending.',
+ plan:'Ravi updates the standard work by 20 Jan. Mei adds the gauge and trains both shifts by 27 Jan. Review at the cell board weekly.',
+ followup:'Measure chipping rate weekly for 8 weeks. If it exceeds 2% at any point, revert to the schedule and re-open the analysis.',
+ wentToGemba:true,ownerNamed:true,followUpDate:'2027-02-28'};
+function load(){try{var x=JSON.parse(localStorage.getItem(KEY)||'null');if(x)r=x}catch(e){r={}}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(r))}catch(e){}}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function build(){
+  $('form').innerHTML=S.SECTIONS.map(function(s,i){
+    return '<div class="card"><label for="'+s.id+'"><b>'+(i+1)+'. '+esc(s.name)+'</b></label>'+
+      '<p class="note" style="margin:0 0 6px">'+esc(s.prompt)+'</p>'+
+      '<textarea id="'+s.id+'" data-k="'+s.id+'">'+esc(r[s.id]||'')+'</textarea></div>';
+  }).join('');
+  $('title').value=r.title||'';$('owner').value=r.owner||'';$('date').value=r.date||'';
+  $('gemba').checked=!!r.wentToGemba;$('owned').checked=!!r.ownerNamed;$('fdate').value=r.followUpDate||'';
+}
+function check(){
+  var v=S.review(r);
+  $('stats').innerHTML='<div class="stat"><b class="'+(v.completeness===100?'good':'mid')+'">'+Math.round(v.completeness)+'%</b><span>Sections filled ('+v.sectionsFilled+' of '+S.SECTIONS.length+')</span></div>'+
+    '<div class="stat"><b class="'+(v.blockers.length?'bad':'good')+'">'+v.blockers.length+'</b><span>Blockers</span></div>'+
+    '<div class="stat"><b class="'+(v.warnings.length?'mid':'good')+'">'+v.warnings.length+'</b><span>Warnings</span></div>';
+  var names={};S.SECTIONS.forEach(function(s){names[s.id]=s.name});
+  $('chk').innerHTML=v.issues.length?
+    '<ul>'+v.issues.map(function(i){
+      var nm=names[i.section]||i.section,body=i.text;
+      if(body.indexOf(nm+': ')===0)body=body.slice(nm.length+2);   // strip only an exact section-name prefix
+      return '<li class="'+(i.severity==='blocker'?'bad':'mid')+'"><b>'+esc(nm)+':</b> '+esc(body)+'</li>'}).join('')+'</ul>'
+    :'<p class="good"><b>Nothing structural missing. The quality of the thinking is still yours to judge.</b></p>';
+}
+$('form').addEventListener('input',function(e){var k=e.target.dataset.k;if(!k)return;r[k]=e.target.value;save();check()});
+['title','owner','date'].forEach(function(i){$(i).addEventListener('input',function(){r[i==='date'?'date':i]=this.value;save()})});
+$('gemba').addEventListener('change',function(){r.wentToGemba=this.checked;save();check()});
+$('owned').addEventListener('change',function(){r.ownerNamed=this.checked;save();check()});
+$('fdate').addEventListener('input',function(){r.followUpDate=this.value;save();check()});
+$('md').addEventListener('click',function(){
+  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([S.toMarkdown(r)],{type:'text/markdown'}));a.download='a3.md';a.click();
+});
+$('ex').addEventListener('click',function(){r=JSON.parse(JSON.stringify(EX));save();build();check()});
+$('clr').addEventListener('click',function(){if(confirm('Clear the whole A3?')){r={};save();build();check()}});
+load();build();check();
+</script>
+</body></html>

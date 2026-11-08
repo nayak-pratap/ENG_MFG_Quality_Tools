@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Changeover (SMED) Analyser</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><nav aria-label="Tools" id="nav"><a href="index.html">Home</a></nav><script src="nav.js"></script>
+<h1>Changeover (SMED) analyser</h1>
+<p class="lead">List every task in a changeover and mark whether it must be done with the machine stopped. The first stage costs nothing: move the work that does not need a stopped machine outside the window.</p></header>
+<main>
+<div class="card scroll">
+<table id="tbl"><thead><tr><th>Task</th><th>Minutes</th><th>Done now</th><th>Could be</th><th>Target min</th><th></th></tr></thead><tbody></tbody></table>
+<p><button id="add">Add task</button> <button id="ex" class="sec">Load example</button> <button id="csv" class="sec">Export CSV</button> <button id="clr" class="sec">Clear</button></p>
+<p id="msg" class="err" role="alert"></p>
+</div>
+<div id="res" hidden>
+<div class="stats" id="out" aria-live="polite"></div>
+<div class="card scroll"><h2 style="margin-top:0">Machine-stopped time by stage</h2><svg id="bar" role="img" aria-label="Changeover time by stage"></svg>
+<p class="note" id="read"></p></div>
+<div class="card"><h2 style="margin-top:0">What it does to batch size</h2>
+<div class="grid">
+<div><label for="dem">Demand per day (units)</label><input id="dem" type="number" min="1" step="any" value="500"></div>
+<div><label for="bud">Time you can spend on changeovers per day (min)</label><input id="bud" type="number" min="1" step="any" value="60"></div>
+</div>
+<div class="stats" id="bout" aria-live="polite"></div>
+<p class="note" style="margin-bottom:0">Changeovers per day = budget divided by changeover time; batch = demand divided by changeovers per day. This is the link between setup reduction and flow: smaller setups buy smaller batches at the same cost in lost time, which is what shortens lead time.</p></div>
+</div>
+<p class="note"><b>Method.</b> Internal tasks need the machine stopped; external tasks can be done while it runs. The changeover time a line feels is the internal total. Stage one separates the two and moves out everything that can be external, which usually needs organisation rather than money. Stage two streamlines what is left, which is where tooling and fixtures earn their cost. Published case figures for the first stage alone cluster around 60%, but almost all of them come from consultancies, are self-reported and carry no baselines, so treat them as illustrative and measure your own. Two cautions from practitioners: do not apply this everywhere, use the constraint or <a href="oee.html">OEE</a> data to choose where it pays; and expect the gains to drift back unless the new sequence becomes <a href="kaizen.html">standard work that someone re-checks</a>. Data stays in this browser.</p>
+</main>
+<script src="lib/smed.js"></script>
+<script>
+var M=SmedTools,$=function(i){return document.getElementById(i)},KEY='smed-v1';
+var rows=[];
+var EX=[
+ {name:'Fetch next die and tooling from store',minutes:12,current:'internal',canBe:'external',targetMinutes:''},
+ {name:'Find and collect hand tools',minutes:6,current:'internal',canBe:'external',targetMinutes:''},
+ {name:'Pre-heat die',minutes:8,current:'internal',canBe:'external',targetMinutes:''},
+ {name:'Unbolt and remove old die',minutes:10,current:'internal',canBe:'internal',targetMinutes:6},
+ {name:'Lift and position new die',minutes:7,current:'internal',canBe:'internal',targetMinutes:5},
+ {name:'Bolt down and align',minutes:14,current:'internal',canBe:'internal',targetMinutes:6},
+ {name:'First-off inspection and adjust',minutes:11,current:'internal',canBe:'internal',targetMinutes:7},
+ {name:'Clean down and return old die',minutes:9,current:'internal',canBe:'external',targetMinutes:''}
+];
+function copy(x){return JSON.parse(JSON.stringify(x))}
+function load(){try{var x=JSON.parse(localStorage.getItem(KEY)||'null');if(x&&x.length)rows=x}catch(e){}if(!rows.length)rows=copy(EX)}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(rows))}catch(e){}}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function f(x,d){return isFinite(x)?Number(x).toLocaleString(undefined,{maximumFractionDigits:d===undefined?1:d}):'n/a'}
+function sel(v,i,k){return '<select data-i="'+i+'" data-k="'+k+'"><option value="internal"'+(v!=='external'?' selected':'')+'>Machine stopped</option><option value="external"'+(v==='external'?' selected':'')+'>Machine running</option></select>'}
+function render(){
+  var tb=$('tbl').tBodies[0];tb.innerHTML='';
+  rows.forEach(function(t,i){
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td><input data-i="'+i+'" data-k="name" value="'+esc(t.name)+'" aria-label="Task '+(i+1)+'" style="min-width:180px"></td>'+
+      '<td><input type="number" min="0" step="any" data-i="'+i+'" data-k="minutes" value="'+esc(t.minutes)+'" aria-label="Minutes for task '+(i+1)+'"></td>'+
+      '<td>'+sel(t.current,i,'current')+'</td><td>'+sel(t.canBe,i,'canBe')+'</td>'+
+      '<td><input type="number" min="0" step="any" data-i="'+i+'" data-k="targetMinutes" value="'+esc(t.targetMinutes)+'" placeholder="same" aria-label="Target minutes for task '+(i+1)+'"></td>'+
+      '<td><button class="sec" data-del="'+i+'" aria-label="Remove task '+(i+1)+'">&times;</button></td>';
+    tb.appendChild(tr);
+  });
+  calc();
+}
+function calc(){
+  $('msg').textContent='';
+  try{
+    var a=M.analyze(rows);
+    $('out').innerHTML=
+      '<div class="stat"><b>'+f(a.baseline)+' min</b><span>Changeover today</span></div>'+
+      '<div class="stat"><b class="good">'+f(a.separated)+' min</b><span>After separating (no spend)</span></div>'+
+      '<div class="stat"><b class="good">'+f(a.streamlined)+' min</b><span>After streamlining</span></div>'+
+      '<div class="stat"><b class="good">'+f(a.pctTotal,0)+'%</b><span>Total reduction</span></div>'+
+      '<div class="stat"><b>'+(a.multiplier===Infinity?'∞':f(a.multiplier,1)+'x')+'</b><span>Changeovers in the old time</span></div>'+
+      '<div class="stat"><b>'+f(a.externalAfter)+' min</b><span>Work moved outside the window</span></div>'+
+      (a.warnings.length?'<p class="err" style="grid-column:1/-1">'+a.warnings.map(esc).join(' ')+'</p>':'');
+    var W=860,H=150,l=150,r2=70,bw=34,max=a.baseline||1,s='';
+    [['Today',a.baseline,'#b42318'],['Separated',a.separated,'#b54708'],['Streamlined',a.streamlined,'#0b6e4f']].forEach(function(p,i){
+      var y=10+i*44,w=p[1]/max*(W-l-r2);
+      s+='<text x="'+(l-8)+'" y="'+(y+22)+'" text-anchor="end" font-size="13" fill="currentColor">'+p[0]+'</text>'+
+         '<rect x="'+l+'" y="'+y+'" width="'+w+'" height="'+bw+'" fill="'+p[2]+'"><title>'+p[0]+': '+f(p[1])+' min</title></rect>'+
+         '<text x="'+(l+w+8)+'" y="'+(y+22)+'" font-size="13" fill="currentColor">'+f(p[1])+' min</text>';
+    });
+    $('bar').setAttribute('viewBox','0 0 '+W+' '+H);$('bar').innerHTML=s;
+    $('read').textContent=a.movedOut.length
+      ? 'Moving '+a.movedOut.length+' task'+(a.movedOut.length>1?'s':'')+' outside the stopped window takes '+f(a.savedBySeparating)+' minutes off before anything is bought, which is '+f(a.pctBySeparating,0)+'% of the changeover. Streamlining the rest takes off a further '+f(a.savedByStreamlining)+'. Note that '+f(a.externalAfter)+' minutes of work still has to be done by somebody while the machine runs.'
+      : 'Every task is marked as needing the machine stopped, so there is nothing to separate. Check that honestly: fetching, staging, pre-heating and cleaning down usually do not need a stopped machine.';
+    batch(a);
+    $('res').hidden=false;
+  }catch(e){$('msg').textContent=e.message;$('res').hidden=true}
+}
+function batch(a){
+  try{
+    var d=+$('dem').value,b=+$('bud').value;
+    var before=M.batchSize(d,b,a.baseline),after=M.batchSize(d,b,a.streamlined);
+    $('bout').innerHTML='<div class="stat"><b>'+f(before.batch,0)+'</b><span>Batch size today</span></div>'+
+      '<div class="stat"><b class="good">'+f(after.batch,0)+'</b><span>Batch size after</span></div>'+
+      '<div class="stat"><b>'+f(before.changeoversPerDay,1)+' → '+f(after.changeoversPerDay,1)+'</b><span>Changeovers per day</span></div>';
+  }catch(e){$('bout').innerHTML='<span class="note">'+esc(e.message)+'</span>'}
+}
+$('tbl').addEventListener('input',function(e){var d=e.target.dataset;if(d.i===undefined)return;
+  rows[d.i][d.k]=(d.k==='minutes'||d.k==='targetMinutes')?e.target.value:e.target.value;save();calc()});
+$('tbl').addEventListener('change',function(e){var d=e.target.dataset;if(d.k==='current'||d.k==='canBe'){rows[d.i][d.k]=e.target.value;save();calc()}});
+$('tbl').addEventListener('click',function(e){var d=e.target.dataset.del;if(d===undefined)return;rows.splice(+d,1);save();render()});
+$('add').addEventListener('click',function(){rows.push({name:'New task',minutes:5,current:'internal',canBe:'internal',targetMinutes:''});save();render()});
+$('ex').addEventListener('click',function(){rows=copy(EX);save();render()});
+$('clr').addEventListener('click',function(){if(confirm('Remove every task?')){rows=[];save();render()}});
+['dem','bud'].forEach(function(i){$(i).addEventListener('input',function(){try{batch(M.analyze(rows))}catch(e){}})});
+$('csv').addEventListener('click',function(){
+  var q=function(s){s=String(s==null?'':s);if(/^[=+\-@]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"'};
+  var out=['Task,Minutes,Done now,Could be,Target minutes'].concat(rows.map(function(t){return [q(t.name),t.minutes,q(t.current||'internal'),q(t.canBe||'internal'),t.targetMinutes].join(',')}));
+  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([out.join('\n')],{type:'text/csv'}));a.download='changeover.csv';a.click();
+});
+load();render();
+</script>
+</body></html>
