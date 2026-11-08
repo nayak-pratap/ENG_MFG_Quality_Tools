@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kaizen Sustainment Tracker</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><nav aria-label="Tools" id="nav"><a href="index.html">Home</a></nav><script src="nav.js"></script>
+<h1>Kaizen sustainment tracker</h1>
+<p class="lead">Logging improvements is the easy half. This tracks whether each one still holds months later, and flags the two ways gains disappear: decay, and nobody re-checking.</p></header>
+<main>
+
+<div class="card">
+<div class="grid">
+<div><label for="thr">Counts as holding at (% of target gain)</label><input id="thr" type="number" min="1" max="200" value="80"></div>
+<div><label for="rev">Re-check every (days)</label><input id="rev" type="number" min="1" max="730" value="90"></div>
+<div><label for="today">Today</label><input id="today" type="date"></div>
+</div>
+<div class="stats" id="stats" aria-live="polite"></div>
+<div id="attention"></div>
+</div>
+
+<div id="list"></div>
+
+<div class="card">
+<p style="margin:0"><button id="add">Add improvement</button> <button id="ex" class="sec">Load example</button> <button id="csv" class="sec">Export CSV</button> <button id="clr" class="sec">Clear all</button></p>
+<p id="msg" class="err" role="alert"></p>
+</div>
+
+<div class="card"><h2 style="margin-top:0">Before you run a kaizen event: readiness</h2>
+<p class="note" style="margin-top:0">Score each from 1 (not at all) to 5 (strongly). These restate the four factors that predicted sustainability in Glover's study of 65 events. They are discussion prompts, <b>not</b> his validated survey instrument, so use them to start the conversation, not to produce a number for a report.</p>
+<div id="ready"></div>
+<div class="stats" id="rout" aria-live="polite"></div>
+</div>
+
+<p class="note"><b>How status is decided.</b> Direction is inferred: if your target is below the baseline, lower is better. Gain is measured against the baseline, and expressed as a percent of the target gain. <b>Holding</b> means the latest check is at or above your threshold. <b>Decayed</b> means it reached the threshold at some point and has since fallen below it. <b>Short</b> means it never got there. <b>Unverified</b> means nobody has checked since the change was made, which is the state the research points at: organizations often see promising early results, then find performance back near pre-event levels within six to twelve months because no one looked. Everything here is stored only in this browser.</p>
+</main>
+
+<script src="lib/kaizen.js"></script>
+<script>
+var K=KaizenTools,$=function(i){return document.getElementById(i)},KEY='kaizen-v1';
+var D={items:[],scores:{}};
+var EX=[
+ {title:'Shadow board for setup gauges',area:'Grinding cell',owner:'Ravi',type:'daily',measure:'Setup time',unit:'min',baseline:22,target:15,date:'2026-02-10',checks:[{date:'2026-03-15',value:15.5},{date:'2026-08-20',value:16}]},
+ {title:'Insert changeover sequence standardised',area:'Turning line',owner:'Mei',type:'event',measure:'Changeover',unit:'min',baseline:48,target:25,date:'2026-01-20',checks:[{date:'2026-02-25',value:26},{date:'2026-09-05',value:44}]},
+ {title:'Coolant concentration check at shift start',area:'Grinding cell',owner:'Sam',type:'daily',measure:'Scrap',unit:'%',baseline:4.2,target:2,date:'2026-06-01',checks:[]},
+ {title:'Tool life board at the cell',area:'Turning line',owner:'Ravi',type:'daily',measure:'Unplanned stops',unit:'per shift',baseline:6,target:2,date:'2026-04-12',checks:[{date:'2026-05-20',value:5}]}
+];
+function copy(x){return JSON.parse(JSON.stringify(x))}
+function load(){try{var x=JSON.parse(localStorage.getItem(KEY)||'null');if(x&&x.items)D=x}catch(e){}if(!D.items.length)D=({items:copy(EX),scores:{}})}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(D))}catch(e){}}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function f(x,d){return (x===null||x===undefined||!isFinite(x))?'n/a':Number(x).toLocaleString(undefined,{maximumFractionDigits:d===undefined?1:d})}
+function opts(){return{holdThreshold:+$('thr').value||80,reviewDays:+$('rev').value||90,today:$('today').value||new Date().toISOString().slice(0,10)}}
+function blank(){return{title:'New improvement',area:'',owner:'',type:'daily',measure:'',unit:'',baseline:10,target:5,date:opts().today,checks:[]}}
+var BADGE={holding:['good','Holding'],decayed:['bad','Decayed'],short:['mid','Short of target'],unverified:['mid','Never re-checked']};
+
+function render(){
+  $('list').innerHTML=D.items.map(function(it,i){
+    var st='',badge='',extra='';
+    try{
+      var p=K.progress(it,opts());
+      var b=BADGE[p.status];
+      badge='<span class="tag '+b[0]+'">'+b[1]+'</span>';
+      st=(p.pctOfTarget===null?'no check yet':f(p.pctOfTarget,0)+'% of target gain')+
+         ' &middot; last looked at '+p.daysSinceReview+' days ago'+(p.overdue?' <b class="bad">(overdue)</b>':'');
+      if(p.status==='decayed')extra='<p class="note bad" style="margin:6px 0 0">Gave back '+f(p.decayPoints,0)+' points from its best result of '+f(p.peakPctOfTarget,0)+'%.</p>';
+    }catch(e){badge='<span class="tag bad">Check inputs</span>';st=esc(e.message)}
+    var checks=(it.checks||[]).slice().sort(function(a,b){return a.date<b.date?-1:1});
+    return '<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">'+
+      '<input data-i="'+i+'" data-k="title" value="'+esc(it.title)+'" aria-label="Title" style="flex:1;min-width:200px;font-weight:600">'+badge+
+      '<button class="sec" data-del="'+i+'" aria-label="Remove improvement">&times;</button></div>'+
+      '<div class="grid" style="margin-top:8px">'+
+      '<div><label>Area</label><input data-i="'+i+'" data-k="area" value="'+esc(it.area)+'"></div>'+
+      '<div><label>Owner</label><input data-i="'+i+'" data-k="owner" value="'+esc(it.owner)+'"></div>'+
+      '<div><label>Type</label><select data-i="'+i+'" data-k="type"><option value="daily"'+(it.type!=='event'?' selected':'')+'>Daily kaizen</option><option value="event"'+(it.type==='event'?' selected':'')+'>Kaizen event</option></select></div>'+
+      '<div><label>Implemented</label><input type="date" data-i="'+i+'" data-k="date" value="'+esc(it.date)+'"></div>'+
+      '<div><label>Measure</label><input data-i="'+i+'" data-k="measure" value="'+esc(it.measure)+'" placeholder="Setup time"></div>'+
+      '<div><label>Unit</label><input data-i="'+i+'" data-k="unit" value="'+esc(it.unit)+'" placeholder="min"></div>'+
+      '<div><label>Baseline</label><input type="number" step="any" data-i="'+i+'" data-k="baseline" value="'+esc(it.baseline)+'"></div>'+
+      '<div><label>Target</label><input type="number" step="any" data-i="'+i+'" data-k="target" value="'+esc(it.target)+'"></div>'+
+      '</div><p class="note" style="margin:8px 0 2px">'+st+'</p>'+extra+
+      '<div style="margin-top:8px"><label>Follow-up checks</label>'+
+      (checks.length?'<div class="scroll"><table><thead><tr><th>Date</th><th>Value'+(it.unit?' ('+esc(it.unit)+')':'')+'</th><th>% of target</th><th></th></tr></thead><tbody>'+
+        checks.map(function(c,ci){var pc='';try{pc=f(100*K.gainOf(+it.baseline,+it.target,+c.value)/Math.abs(it.target-it.baseline),0)+'%'}catch(e){pc='n/a'}
+          return '<tr><td>'+esc(c.date)+'</td><td>'+esc(c.value)+'</td><td>'+pc+'</td><td><button class="sec" data-ci="'+i+','+ci+'" aria-label="Remove check">&times;</button></td></tr>'}).join('')+
+        '</tbody></table></div>':'<p class="note" style="margin:4px 0">None yet. This is the state where gains quietly disappear.</p>')+
+      '<div class="grid" style="margin-top:6px"><div><label>New check date</label><input type="date" id="nd'+i+'" value="'+opts().today+'"></div>'+
+      '<div><label>Value</label><input type="number" step="any" id="nv'+i+'"></div>'+
+      '<div style="align-self:end"><button class="sec" data-addc="'+i+'">Add check</button></div></div></div></div>';
+  }).join('');
+  stats();
+}
+
+function stats(){
+  $('msg').textContent='';
+  try{
+    var s=K.boardStats(D.items,opts());
+    $('stats').innerHTML=
+      '<div class="stat"><b>'+s.total+'</b><span>Improvements</span></div>'+
+      '<div class="stat"><b class="'+(s.holdingRate===null?'':s.holdingRate>=70?'good':'bad')+'">'+(s.holdingRate===null?'n/a':f(s.holdingRate,0)+'%')+'</b><span>Of checked ones, still holding</span></div>'+
+      '<div class="stat"><b class="'+(s.counts.decayed?'bad':'good')+'">'+s.counts.decayed+'</b><span>Decayed</span></div>'+
+      '<div class="stat"><b class="'+(s.counts.unverified?'mid':'good')+'">'+f(s.unverifiedRate,0)+'%</b><span>Never re-checked</span></div>'+
+      '<div class="stat"><b>'+s.distinctOwners+'</b><span>Distinct owners</span></div>'+
+      '<div class="stat"><b>'+s.byType.daily+' / '+s.byType.event+'</b><span>Daily / event</span></div>';
+    var need=s.rows.filter(function(r){return r.p.status==='decayed'||r.p.overdue});
+    $('attention').innerHTML=need.length?
+      '<p class="note" style="margin-bottom:4px"><b>Needs attention</b></p><ul>'+need.map(function(r){
+        return '<li>'+esc(r.imp.title||'(untitled)')+' &mdash; '+(r.p.status==='decayed'?'decayed to '+f(r.p.pctOfTarget,0)+'% of target':'not checked for '+r.p.daysSinceReview+' days')+'</li>'}).join('')+'</ul>'
+      :(s.total?'<p class="note good" style="margin-bottom:0">Nothing decayed and nothing overdue for a re-check.</p>':'');
+  }catch(e){$('msg').textContent=e.message}
+}
+
+$('list').addEventListener('input',function(e){
+  var d=e.target.dataset;if(d.i===undefined||!d.k)return;
+  var v=e.target.value;
+  D.items[d.i][d.k]=(d.k==='baseline'||d.k==='target')?(v===''?'':+v):v;
+  save();stats();
+});
+$('list').addEventListener('change',function(e){
+  var d=e.target.dataset;
+  if(d.k==='type'){D.items[d.i].type=e.target.value;save();render()}
+  else if(d.k==='date'||d.k==='baseline'||d.k==='target')render();
+});
+$('list').addEventListener('click',function(e){
+  var d=e.target.dataset;
+  if(d.del!==undefined){D.items.splice(+d.del,1);save();render();return}
+  if(d.ci!==undefined){var p=d.ci.split(',');var it=D.items[+p[0]];
+    var sorted=it.checks.slice().sort(function(a,b){return a.date<b.date?-1:1});
+    var gone=sorted[+p[1]];it.checks=it.checks.filter(function(c){return c!==gone});save();render();return}
+  if(d.addc!==undefined){var i=+d.addc,dt=$('nd'+i).value,val=$('nv'+i).value;
+    if(!dt||val===''){$('msg').textContent='A check needs both a date and a value.';return}
+    D.items[i].checks.push({date:dt,value:+val});save();render();return}
+});
+['thr','rev','today'].forEach(function(id){$(id).addEventListener('input',render)});
+$('add').addEventListener('click',function(){D.items.push(blank());save();render()});
+$('ex').addEventListener('click',function(){D.items=copy(EX);save();render()});
+$('clr').addEventListener('click',function(){if(confirm('Remove every improvement?')){D.items=[];save();render()}});
+$('csv').addEventListener('click',function(){
+  var q=function(s){s=String(s==null?'':s);if(/^[=+\-@]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"'};
+  var out=['Title,Area,Owner,Type,Measure,Unit,Baseline,Target,Implemented,Checks,Latest value,Percent of target,Status,Days since review'];
+  D.items.forEach(function(it){
+    var p=null;try{p=K.progress(it,opts())}catch(e){}
+    out.push([q(it.title),q(it.area),q(it.owner),q(it.type),q(it.measure),q(it.unit),it.baseline,it.target,q(it.date),
+      (it.checks||[]).length,p&&p.latest?p.latest.value:'',p&&p.pctOfTarget!==null?Math.round(p.pctOfTarget):'',q(p?p.status:'invalid'),p?p.daysSinceReview:''].join(','));
+  });
+  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([out.join('\n')],{type:'text/csv'}));a.download='kaizen-sustainment.csv';a.click();
+});
+
+// readiness
+$('ready').innerHTML=K.READINESS_FACTORS.map(function(fc){
+  return '<div style="margin-bottom:10px"><label for="r_'+fc.id+'">'+esc(fc.name)+'</label>'+
+    '<p class="note" style="margin:0 0 4px">'+esc(fc.prompt)+'</p>'+
+    '<input type="number" min="1" max="5" step="1" id="r_'+fc.id+'" data-rf="'+fc.id+'" value="'+(D.scores[fc.id]||3)+'" style="width:80px" aria-label="'+esc(fc.name)+' score 1 to 5"></div>';
+}).join('');
+function readiness(){
+  var sc={};K.READINESS_FACTORS.forEach(function(fc){sc[fc.id]=+$('r_'+fc.id).value});
+  D.scores=sc;save();
+  try{
+    var r=K.readiness(sc);
+    var cls=r.total>=16?'good':r.total>=11?'mid':'bad';
+    $('rout').innerHTML='<div class="stat"><b class="'+cls+'">'+r.total+' / '+r.max+'</b><span>Readiness</span></div>'+
+      '<div class="stat"><b class="'+cls+'" style="font-size:1rem">'+esc(r.verdict)+'</b><span>Verdict</span></div>'+
+      '<div class="stat"><b style="font-size:1rem">'+(r.weakest.length===K.READINESS_FACTORS.length?'all scored the same':r.weakest.map(function(w){return esc(w.name)}).join('; '))+'</b><span>Weakest factor</span></div>';
+  }catch(e){$('rout').innerHTML='<span class="err">'+esc(e.message)+'</span>'}
+}
+$('ready').addEventListener('input',readiness);
+
+$('today').value=new Date().toISOString().slice(0,10);
+load();render();readiness();
+</script>
+</body></html>

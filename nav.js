@@ -4,6 +4,7 @@
     ['index.html', 'Home'],
     ['spc.html', 'SPC'], ['fmea.html', 'FMEA'], ['sigma.html', 'DPMO'], ['grr.html', 'Gage R&R'], ['pareto.html', 'Pareto'],
     ['eightd.html', '8D'], ['ppap.html', 'PPAP'], ['qfd.html', 'QFD'],
+    ['kaizen.html', 'Kaizen'],
     ['oee.html', 'OEE and takt'], ['kanban.html', 'WIP simulator'], ['vsm.html', 'VSM'], ['selector.html', 'Selector']
   ];
   var here = (location.pathname.split('/').pop() || 'index.html');

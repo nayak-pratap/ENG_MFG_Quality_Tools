@@ -8,6 +8,7 @@ Static, dependency-free browser tools for shop-floor quality work. Open `index.h
 | `fmea.html` | FMEA worksheet with RPN and Action Priority, CSV export, local autosave |
 | `sigma.html` | DPMO, yield and sigma level (1.5 shift by default), both directions |
 
+| `kaizen.html` | Kaizen sustainment tracker: baseline, target, dated re-checks, decay and overdue flags, readiness prompts |
 | `oee.html` | OEE with loss breakdown, takt and line balance, Little's Law, Kingman queue time |
 | `kanban.html` | Push vs CONWIP/kanban simulation with WIP sweep charts |
 | `vsm.html` | Current-state VSM arithmetic: lead time, value-added ratio, load vs takt |
@@ -18,7 +19,7 @@ Static, dependency-free browser tools for shop-floor quality work. Open `index.h
 | `ppap.html` | PPAP readiness tracker by submission level, CSV export |
 | `qfd.html` | QFD House-of-Quality scoring |
 
-All maths lives in `lib/qtools.js` (quality) and `lib/ops.js` (flow) and `lib/qsys.js` (quality systems) and is covered by `npm test` (Node 18+).
+All maths lives in `lib/qtools.js` (quality) and `lib/ops.js` (flow), `lib/qsys.js` (quality systems) and `lib/kaizen.js` (sustainment) and is covered by `npm test` (Node 18+).
 
 ## Method notes
 - Cp/Cpk use within-subgroup sigma (MRbar/1.128 or Rbar/d2); Pp/Ppk use the overall sample standard deviation.
